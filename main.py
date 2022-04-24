@@ -16,45 +16,13 @@ thistory = {}
 
 ticker = "AMZN"
 icker = yf.Ticker(ticker)
-exporter = yf.download(ticker, period="5y")
+exporter = yf.download(ticker, period="max")
 # earnings = icker.calendar
 
 t_df = pd.DataFrame(data=exporter)
 ticker_df = t_df.to_dict()
 # print(exporter)
 keys_tr = ("Open", "High", "Low", "Adj Close", "Volume")
-# print(ticker_df)
-
-# print(datetime.now())
-# print(datetime(2021,1,1)+timedelta(1))
-# print(datetime(2022,1,1).weekday())
-
-
-trading_list = []
-# def trading_days(year):
-#     """
-#     This is a function used to find a whole year, then remove all the weekends from it (Note that STAT holidays are not removed as of right now)
-
-#     year -> Year you want to find (int only)
-#     """
-#     if type(year) != int:
-#         raise NameError("Only integers are acceptable here")
-#     else:
-#         # weekends = []
-#         trading_list.append(datetime(year, 1, 1))
-#         for x in range(1, 365, 1):
-#             eg = pd.Timestamp(datetime(year, 1, 1)+timedelta(x))
-#             trading_list.append(eg)
-#         for y in range(0, 313, 1):
-#             if trading_list[y].weekday() == 5:
-#                 trading_list.pop(y)
-#         for y in range(0, 260, 1):
-#             if trading_list[y].weekday() == 6:
-#                 trading_list.pop(y)
-#         print(trading_list)
-
-
-# trading_days(2022)
 
 
 def pop_multiple(var, *args):
@@ -89,16 +57,19 @@ li_close = []
 # Note that lt_df_keys is in a function, but it is a global variable stated with the global keyword.
 
 
-class PcPatterns():
+class FinanceIndicators():
     """
-    This is the class which I am going to use to run all my programs
+    This class is what stores all the indicators used commonly by investors for figuring out if a security
     """
 
-    def __init__(self, simple_ma1_length=None, simple_ma2_length=None, simple_ma3_length=None):
+    def __init__(self, simple_ma1_length=None, simple_ma2_length=None, ema1_ol=None, ema2_ol=None, ema1_length=None, ema2_length=None):
         self.simple_ma1_length = simple_ma1_length
         self.simple_ma2_length = simple_ma2_length
+        self.ema1_ol = ema1_ol
+        self.ema2_ol = ema2_ol
+        self.ema1_length = ema1_length
+        self.ema2_length = ema2_length
         # self.simple_ma3_length = simple_ma3_length
-        # self.len_of_list = len_of_list
 
     def extract_values(self):
         """
@@ -143,7 +114,7 @@ class PcPatterns():
 
         This class method finds the Simple Moving Average for a stock over a certain period of time. Currently only supports 2 different values
 
-        There are no parametes you have to enter in for the function, but rather the self.simple_ma_length value held in the __init__ function
+        There are no parameters you have to enter in for the function, but rather the self.simple_ma_length value held in the __init__ function
         """
         averages = []
         i = 0
@@ -154,7 +125,7 @@ class PcPatterns():
             tf_average = sum(timeframe) / self.simple_ma1_length
             averages.append(tf_average)
             i += 1
-        print(averages)
+        # print(averages)
         averages2 = []
         j = 0
 
@@ -164,17 +135,61 @@ class PcPatterns():
             tf_average2 = sum(timeframe2) / self.simple_ma2_length
             averages2.append(tf_average2)
             j += 1
-        print(averages)
+        # print(averages)
+
+    def exponential_ma(self, prices, length, output_list):
+        """
+        Calculates the exponential average for a specified number of days.
+
+        Parameters: prices - The list of prices you want to find the EMA of
+
+        length: The length / window of time you want to find for the EMA.
+
+        output_list: The list you want the EMA values to be extracted to.
+
+        Calculation for a 20-day exponential moving average is:
+
+        First day = SMA
+
+        Multiplier = (2 / (20 + 1)) 
+
+        EMA = (Close - EMA(previous day)) * multiplier + EMA (previous day)
+        """
+        multiplier = (2 / (self.ema1_length+1))
+        # print(multiplier)
+        i = 0
+        e_fv = sum(prices[0:length]) / length
+        output_list.append(e_fv)
+        while i < len(prices) - length+1:
+            window = prices[i:i+length]
+            e_window_average = (
+                window[-1] - output_list[-1]) * multiplier + output_list[-1]
+            output_list.append(e_window_average)
+            i += 1
+        print(output_list)
+
+    def rsi(self):
+        pass
+
+    def macd(self):
+        self.ema1_length = 12
+        self.ema2_length = 26
+        print(self.ema1_length)
 
 
-pc = PcPatterns()
-# pc.__init__()
-pc.simple_ma1_length = 50
-pc.simple_ma2_length = 200
-# pc.simple_ma3_length = 0
-pc.extract_values()
-pc.extract_cprices()
-pc.percent_change()
-pc.simple_ma()
-
-print(len(t_df_keys))
+fi = FinanceIndicators()
+# fi.__init__()
+fi.simple_ma1_length = 50
+fi.simple_ma2_length = 200
+fi.ema1_ol = e1_moving_averages = []
+fi.ema2_ol = e2_moving_averages = []
+fi.ema1_length = 20
+fi.ema2_length = 50
+# fi.simple_ma3_length = 0
+fi.extract_values()
+fi.extract_cprices()
+fi.percent_change()
+fi.simple_ma()
+fi.exponential_ma(li_close, fi.ema1_length, fi.ema1_ol)
+# fi.exponential_ma(li_close, fi.ema2_length, )
+# print(len(t_df_keys))
