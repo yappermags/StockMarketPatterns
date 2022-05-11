@@ -1,4 +1,5 @@
-import main
-import numpy as np
+from main import FinanceIndicators as fi
 
-np.average()
+fi.ticker = "BRK-B"
+
+print(fi.ticker)
