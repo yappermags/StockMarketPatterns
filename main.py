@@ -229,17 +229,15 @@ class FinanceIndicators():
         ----------
         None
         """
-        global ppo
-        global ppo_sl
         self.ppo_ol = []
-        ppo = []
-        ppo_sl = []
+        self.ppo = []
+        self.ppo_sl = []
         output_list = []
         macd26 = []
         self.exponential_ma(self.li_close, ppo_divide, macd26)
         for x in range(0, len(macd), 1):
-            ppo.append((macd[x] / macd26[x]) * 100)
-        self.exponential_ma(ppo, 9, ppo_sl)
+            self.ppo.append((macd[x] / macd26[x]) * 100)
+        self.exponential_ma(self.ppo, 9, self.ppo_sl)
         for x in range(0, len(ppo_sl), 1):
             self.ppo_ol.append(ppo[x+7] - ppo_sl[x])
 
@@ -297,7 +295,7 @@ if __name__ == "__main__":
     # This runs the zip() method and exports the values to a CSV file. Only enabled in stable packages, otherwise commented out.
     # DO NOT DELETE THE BELOW LINES
     all_indicators = zip(fi.t_df_dates, fi.li_close, fi.d_percent_change, fi.sma1_ol,
-                         fi.sma2_ol, macd, macd_9ema, m_histogram, ppo, ppo_sl, fi.ppo_ol, fi.rsi_ol[0])
+                         fi.sma2_ol, macd, macd_9ema, m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_ol, fi.rsi_ol[0])
     ai_df = pd.DataFrame(all_indicators, columns=[
         "Timestamp", "Close", "Daily Percent Change", "50-Day MA", "200-Day MA", "MACD", "MACD Signal Line", "MACD Histogram", "PPO", "PPO Signal Line", "PPO Histogram", "RSI"])
     ai_df.to_csv(f'CSVinfo/{fi.ticker} {time()}.csv', index=False)
