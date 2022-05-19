@@ -57,6 +57,9 @@ class FinanceIndicators():
 
         self.t_df_keys = self.ticker_df["Close"].keys()
         self.t_df_dates = []
+        self.li_open = []
+        self.li_high = []
+        self.li_low = []
         self.li_close = []
 
     def extract_dates(self):
@@ -78,12 +81,21 @@ class FinanceIndicators():
         """
         for x in range(0, len(self.t_df_keys), 1):
             try:
+                dict_i_open = self.ticker_df["Open"][self.t_df_keys[x]]
+                dict_i_high = self.ticker_df["High"][self.t_df_keys[x]]
+                dict_i_low = self.ticker_df["Low"][self.t_df_keys[x]]
                 dict_i_close = self.ticker_df["Close"][self.t_df_keys[x]]
+                self.li_open.append(dict_i_open)
+                self.li_high.append(dict_i_high)
+                self.li_low.append(dict_i_low)
                 self.li_close.append(dict_i_close)
             except KeyError:
                 continue
             finally:
                 pass
+        gjsfvd = zip(self.t_df_dates,self.li_open,self.li_high,self.li_low,self.li_close)
+        df = pd.DataFrame(gjsfvd)
+        df.to_csv(f"{self.ticker}.csv")
 
         # print(self.li_close[slice(1, 51, 1)])
 
@@ -295,55 +307,110 @@ class FinanceIndicators():
         dsq_ma = np.mean(deviation, axis=1)
         self.stadev = np.sqrt(dsq_ma)
         output_list.append(list(np.sqrt(dsq_ma)))
-    def bollinger_bands(self,bb_length=20,multiplier=2):
+
+    def bollinger_bands(self, bb_length=20, multiplier=2):
         """This gathers the bollinger bands as created by John Bollinger
 
         Notes
-        
+
         """
         stddev = []
         bb_stddev = []
         self.bb_middle = []
         self.bb_upper = []
         self.bb_lower = []
-        self.simple_ma(self.li_close,bb_length,self.bb_middle)
-        self.standard_deviation(self.li_close,stddev,bb_length)
-        for x in range(0,len(stddev[0]),1):
+        self.simple_ma(self.li_close, bb_length, self.bb_middle)
+        self.standard_deviation(self.li_close, stddev, bb_length)
+        for x in range(0, len(stddev[0]), 1):
             bb_stddev.append(stddev[0][x]*multiplier)
-        for x in range(0,len(self.bb_middle),1):
+        for x in range(0, len(self.bb_middle), 1):
             self.bb_lower.append(self.bb_middle[x] - bb_stddev[x])
             self.bb_upper.append(self.bb_middle[x] + bb_stddev[x])
-    def ulcer_index(self,ui_length=14):
-        i = 0
-        seperated_close = []
-        np_seperated_close = []
-        max_prices = []
-        np_max_prices = np.empty((0,1))
-        percent_drawdown = []
-        pd_squared = []
-        sq_average = []
-        self.ulcer_index = []
-        while i < len(self.li_close)-ui_length:
-            window = self.li_close[i:i+ui_length]
-            np_seperated_close = np.append(np_seperated_close,window,axis=0)
-            i += 1
-        np_seperated_close = np_seperated_close.reshape(int(len(np_seperated_close)/ui_length),ui_length)
-        # np_seperated_close = np.array(seperated_close).reshape(len(np_seperated_close),ui_length)
-        for x in range(0,len(np_seperated_close),1):
-            for y in range(1,len(np_seperated_close[0]),1):
-                np_max_prices = np.append(np_max_prices,max(np_seperated_close[x][0:y]))
-        # np_max_prices = np.amax(np_seperated_close,axis=1)
-        # np_max_prices = np.array(max_prices)
-        for x in range(0,int(len(np_max_prices)/(ui_length-1)),1):
-            np_max_prices = np.insert(np_max_prices,0,np_seperated_close[x][0])
-        np_max_prices = np_max_prices.reshape(int(len(np_max_prices)/ui_length),ui_length)
 
-        # percent_drawdown = np_seperated_close - np_max_prices
-        while i < len(pd_squared):
-            window = pd_squared[i:i+ui_length]
-            self.ulcer_index.append(math.sqrt(sum(window)/ui_length))
-            i += 1
+    def seperated_close(self, prices, sc_length, output_list):
+        sc_lc = int(len(prices)-(sc_length-1))
+        sc = np.empty((0, 1), float)
+        for x in range(0, sc_lc, 1):
+            window = prices[x:x+sc_length]
+            sc = np.append(sc, window)
+        sc = sc.reshape(int(len(sc)/sc_length), sc_length)
+        output_list.append(list(sc))
 
+    def waldo_volatility_indicator(self, wvi_length=28):
+        """Measures volatility and works a lot like the Ulcer Index.
+
+        Parameters
+        ----------
+
+        wvi_length: `int`
+        The length of time you want to measure the Waldo Volatility Indicator
+
+        """
+        seperated_close = np.empty((0, 1), float)
+        self.waldo_vola_indicator = []
+        for x in range(0, len(self.li_close)-wvi_length, 1):
+            window = self.li_close[x:x+wvi_length]
+            seperated_close = np.append(seperated_close, window)
+        seperated_close = seperated_close.reshape(
+            int(len(seperated_close)/wvi_length), wvi_length)
+        mp = np.amax(seperated_close, axis=1)
+        max_prices = np.repeat(mp, wvi_length)
+        max_prices = max_prices.reshape(
+            int(len(max_prices)/wvi_length), wvi_length)
+        price_dropdown = np.abs(seperated_close - max_prices)
+        pd_mean = np.mean(price_dropdown, axis=1)
+        self.waldo_vola_indicator = np.sqrt(pd_mean)
+        self.waldo_vola_indicator = np.insert(
+            self.waldo_vola_indicator, 0, np.zeros(wvi_length))
+
+    def ichimoku_cloud(self):
+        ts_sc_min = []
+        ts_sc_max = []
+        ks_sc_min = []
+        ks_sc_max = []
+        se_b_min = []
+        se_b_max = []
+        self.tenkan_sen = []
+        ks_sc = []
+        self.kijun_sen = []
+        self.senkou_a = []
+        self.senkou_b = []
+        chikou_span = []
+        self.seperated_close(self.li_low, 9, ts_sc_min)
+        self.seperated_close(self.li_high, 9, ts_sc_max)
+        ts_sc_min = np.array(ts_sc_min[0])
+        ts_sc_max = np.array(ts_sc_max[0])
+        self.seperated_close(self.li_low, 26, ks_sc_min)
+        self.seperated_close(self.li_high, 26, ks_sc_max)
+        ks_sc_min = np.array(ks_sc_min[0])
+        ks_sc_max = np.array(ks_sc_max[0])
+        self.seperated_close(self.li_low, 52, se_b_min)
+        self.seperated_close(self.li_high, 52, se_b_max)
+        se_b_min = np.array(se_b_min[0])
+        se_b_max = np.array(se_b_max[0])
+
+        def find_min_max(min_iv, max_iv, output_number):
+            max_iv_list = []
+            min_iv_list = []
+            for x in range(0, len(max_iv), 1):
+                max_iv_list.append(max(max_iv[x]))
+                min_iv_list.append(min(min_iv[x]))
+            max_iv_list = np.array(max_iv_list)
+            min_iv_list = np.array(min_iv_list)
+            if output_number == 0:
+                self.tenkan_sen = ((min_iv_list + max_iv_list)/2)
+                self.tenkan_sen = np.insert(self.tenkan_sen, 0, np.zeros(8))
+            elif output_number == 1:
+                self.kijun_sen = ((min_iv_list + max_iv_list)/2)
+                self.kijun_sen = np.insert(self.kijun_sen, 0, np.zeros(25))
+            elif output_number == 2:
+                self.senkou_b = ((min_iv_list + max_iv_list)/2)
+                self.senkou_b = np.insert(self.senkou_b, 0, np.zeros(51+26))
+        find_min_max(ts_sc_min, ts_sc_max, 0)
+        find_min_max(ks_sc_min, ks_sc_max, 1)
+        self.senkou_a = (self.tenkan_sen - self.kijun_sen)/2
+        find_min_max(se_b_min, se_b_max, 2)
+        pass
 
 
 def nan_generator(amount, output_list):
@@ -364,7 +431,7 @@ def nan_generator(amount, output_list):
 if __name__ == "__main__":
     # Defining fi and the variables inside
     fi = FinanceIndicators()
-    fi.ticker = "BNS.TO"
+    fi.ticker = "AMZN"
     fi.sma1_ol = []
     fi.sma2_ol = []
     fi.simple_ma1_length = 50
@@ -386,8 +453,9 @@ if __name__ == "__main__":
     fi.ppo_whistogram()
     fi.standard_deviation(fi.li_close, stdev)
     fi.bollinger_bands()
-    fi.ulcer_index()
     fi.stdev.append(list(stdev[0]))
+    fi.waldo_volatility_indicator()
+    fi.ichimoku_cloud()
     nan_generator(1, fi.d_percent_change)
     nan_generator(fi.simple_ma1_length-1, fi.sma1_ol)
     nan_generator(fi.simple_ma2_length-1, fi.sma2_ol)
@@ -402,14 +470,14 @@ if __name__ == "__main__":
     nan_generator(19, fi.bb_middle)
     nan_generator(19, fi.bb_upper)
     nan_generator(19, fi.bb_upper)
-    nan_generator(14, fi.ulcer_index)
     # fi.stdev
     # This runs the zip() method and exports the values to a CSV file. Only enabled in stable packages, otherwise commented out.
     # DO NOT DELETE THE BELOW LINES
-    all_indicators = zip(fi.t_df_dates, fi.li_close, fi.d_percent_change, fi.sma1_ol,
-                         fi.sma2_ol, macd, macd_9ema, m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_ol, fi.rsi_ol[0],fi.stdev[0],fi.bb_lower,fi.bb_middle,fi.bb_upper,fi.ulcer_index)
-    ai_df = pd.DataFrame(all_indicators, columns=[
-        "Timestamp", "Close", "Daily Percent Change", "50-Day MA", "200-Day MA", "MACD", "MACD Signal Line", "MACD Histogram", "PPO", "PPO Signal Line", "PPO Histogram", "RSI","Standard Deviation","Lower Bollinger Band","Middle Bollinger Band","Upper Bollinger Band","Ulcer Index"])
-    os.chdir("..")
-    print(os.getcwd())
-    ai_df.to_csv(f'StockMarketPatterns/CSVinfo/{fi.ticker} {time()}.csv', index=False)
+    # all_indicators = zip(fi.t_df_dates, fi.li_close, fi.d_percent_change, fi.sma1_ol,
+    #                      fi.sma2_ol, macd, macd_9ema, m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_ol, fi.rsi_ol[0], fi.stdev[0], fi.bb_lower, fi.bb_middle, fi.bb_upper, fi.waldo_vola_indicator)
+    # ai_df = pd.DataFrame(all_indicators, columns=[
+    #     "Timestamp", "Close", "Daily Percent Change", "50-Day MA", "200-Day MA", "MACD", "MACD Signal Line", "MACD Histogram", "PPO", "PPO Signal Line", "PPO Histogram", "RSI", "Standard Deviation", "Lower Bollinger Band", "Middle Bollinger Band", "Upper Bollinger Band", "Waldo Volatility Indicator"])
+    # os.chdir("..")
+    # print(os.getcwd())
+    # ai_df.to_csv(
+    #     f'StockMarketPatterns/CSVinfo/{fi.ticker} {time()}.csv', index=False)
