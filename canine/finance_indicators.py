@@ -10,14 +10,17 @@ To call in another python script, use the following line for importing:
 `from finance_indicators import FinanceIndicators as fi
 """
 
+from decimal import ROUND_DOWN
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pandas as pd
 import csv
 import numpy as np
+import pandas_market_calendars as mcal
 from time import time
 import math
 import os
+import re
 
 # Note that lstock_symbol.t_df_keys is in a function, but it is a global variable stated with the global keyword.
 
@@ -362,8 +365,25 @@ class FinanceIndicators():
         self.waldo_vola_indicator = np.sqrt(pd_mean)
         self.waldo_vola_indicator = np.insert(
             self.waldo_vola_indicator, 0, np.zeros(wvi_length))
+        self.waldo_vola_indicator = np.append(self.waldo_vola_indicator,np.zeros(26))
 
-    def ichimoku_cloud(self):
+    def ichimoku_cloud(self,tenkan_sen_len=9,kijun_sen_len=26,senkou_b_len=52,fallback=26):
+        """Calcaulates all 5 Ichimoku Cloud calculations that make the full cloud.
+        
+        Parameters
+        ----------
+        tenkan_sen_len=9: `int`
+        The time period you want to use for the Tenkan Sen (Conversion Line)
+        
+        kijun_sen_len=26: `int`
+        The time period you want to use for the Tenkan Sen (Base Line)
+        
+        senkou_b_len=52: `int`
+        The time period you want to use for Senkou Span B (Leading Span B)
+        
+        fallback=9: `int`
+        The amount of time you want the Senkou A+B to be set in the future, and the time you want the chikou_span to be set in the past
+        """
         ts_sc_min = []
         ts_sc_max = []
         ks_sc_min = []
@@ -375,17 +395,17 @@ class FinanceIndicators():
         self.kijun_sen = []
         self.senkou_a = []
         self.senkou_b = []
-        chikou_span = []
-        self.seperated_close(self.li_low, 9, ts_sc_min)
-        self.seperated_close(self.li_high, 9, ts_sc_max)
+        self.chikou_span = []
+        self.seperated_close(self.li_low, tenkan_sen_len, ts_sc_min)
+        self.seperated_close(self.li_high, tenkan_sen_len, ts_sc_max)
         ts_sc_min = np.array(ts_sc_min[0])
         ts_sc_max = np.array(ts_sc_max[0])
-        self.seperated_close(self.li_low, 26, ks_sc_min)
-        self.seperated_close(self.li_high, 26, ks_sc_max)
+        self.seperated_close(self.li_low, kijun_sen_len, ks_sc_min)
+        self.seperated_close(self.li_high, kijun_sen_len, ks_sc_max)
         ks_sc_min = np.array(ks_sc_min[0])
         ks_sc_max = np.array(ks_sc_max[0])
-        self.seperated_close(self.li_low, 52, se_b_min)
-        self.seperated_close(self.li_high, 52, se_b_max)
+        self.seperated_close(self.li_low, senkou_b_len, se_b_min)
+        self.seperated_close(self.li_high, senkou_b_len, se_b_max)
         se_b_min = np.array(se_b_min[0])
         se_b_max = np.array(se_b_max[0])
 
@@ -399,33 +419,44 @@ class FinanceIndicators():
             min_iv_list = np.array(min_iv_list)
             if output_number == 0:
                 self.tenkan_sen = ((min_iv_list + max_iv_list)/2)
-                self.tenkan_sen = np.insert(self.tenkan_sen, 0, np.zeros(8))
+                self.tenkan_sen = np.insert(self.tenkan_sen, 0, np.zeros((tenkan_sen_len-1)+fallback))
             elif output_number == 1:
                 self.kijun_sen = ((min_iv_list + max_iv_list)/2)
-                self.kijun_sen = np.insert(self.kijun_sen, 0, np.zeros(25))
+                self.kijun_sen = np.insert(self.kijun_sen, 0, np.zeros((kijun_sen_len-1)+fallback))
             elif output_number == 2:
                 self.senkou_b = ((min_iv_list + max_iv_list)/2)
-                self.senkou_b = np.insert(self.senkou_b, 0, np.zeros(51+26))
+                self.senkou_b = np.insert(self.senkou_b, 0, np.zeros((senkou_b_len-1)+fallback))
+            else:
+                raise SyntaxError (f"{output_number} not available.")
         find_min_max(ts_sc_min, ts_sc_max, 0)
         find_min_max(ks_sc_min, ks_sc_max, 1)
-        self.senkou_a = (self.tenkan_sen - self.kijun_sen)/2
+        self.senkou_a = (self.tenkan_sen + self.kijun_sen)/2
+        # self.senkou_a = np.insert(self.senkou_a,0,np.zeros(fallback))
         find_min_max(se_b_min, se_b_max, 2)
+        np_close = np.array(self.li_close)
+        np_close = np.delete(np_close,np.arange(fallback))
+        np_close = np.append(np_close,np.zeros(fallback+fallback))
+        self.chikou_span = np_close
         pass
 
 
-def nan_generator(amount, output_list):
+def nan_generator(amount,input_list):
     """ Takes the np.zeros() array and adds it to a non-numpy list
     This very simple function takes an arroy of np.zeros() and puts it into the first values of a non-numpy list.
 
     Parameters
     ----------
-    amount : int
+    amount: `int`
         The amount of zeros you need to use.
-    output_list : list
+    input_list: `list`
         The list you want to add the zeros to.
     """
     for x in range(0, amount, 1):
-        output_list.insert(0, float("NaN"))
+        input_list.insert(0, float("NaN"))
+
+def zero_after_values(input_list,amount=26):
+    for x in range(0, amount, 1):
+        input_list.append(0)
 
 
 if __name__ == "__main__":
@@ -456,6 +487,7 @@ if __name__ == "__main__":
     fi.stdev.append(list(stdev[0]))
     fi.waldo_volatility_indicator()
     fi.ichimoku_cloud()
+
     nan_generator(1, fi.d_percent_change)
     nan_generator(fi.simple_ma1_length-1, fi.sma1_ol)
     nan_generator(fi.simple_ma2_length-1, fi.sma2_ol)
@@ -469,15 +501,31 @@ if __name__ == "__main__":
     nan_generator(19, fi.bb_lower)
     nan_generator(19, fi.bb_middle)
     nan_generator(19, fi.bb_upper)
-    nan_generator(19, fi.bb_upper)
-    # fi.stdev
+    # for x in range(0, 26, 1):
+        # fi.t_df_dates.insert(0, len(fi.t_df_dates)+1)
+    zero_after_values(fi.t_df_dates)
+    zero_after_values(fi.li_close)
+    zero_after_values(fi.d_percent_change)
+    zero_after_values(fi.sma1_ol)
+    zero_after_values(fi.sma2_ol)
+    zero_after_values(macd)
+    zero_after_values(macd_9ema)
+    zero_after_values(m_histogram)
+    zero_after_values(fi.ppo)
+    zero_after_values(fi.ppo_sl)
+    zero_after_values(fi.ppo_ol)
+    zero_after_values(fi.rsi_ol[0])
+    zero_after_values(fi.stdev[0])
+    zero_after_values(fi.bb_lower)
+    zero_after_values(fi.bb_middle)
+    zero_after_values(fi.bb_upper)
     # This runs the zip() method and exports the values to a CSV file. Only enabled in stable packages, otherwise commented out.
     # DO NOT DELETE THE BELOW LINES
-    # all_indicators = zip(fi.t_df_dates, fi.li_close, fi.d_percent_change, fi.sma1_ol,
-    #                      fi.sma2_ol, macd, macd_9ema, m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_ol, fi.rsi_ol[0], fi.stdev[0], fi.bb_lower, fi.bb_middle, fi.bb_upper, fi.waldo_vola_indicator)
-    # ai_df = pd.DataFrame(all_indicators, columns=[
-    #     "Timestamp", "Close", "Daily Percent Change", "50-Day MA", "200-Day MA", "MACD", "MACD Signal Line", "MACD Histogram", "PPO", "PPO Signal Line", "PPO Histogram", "RSI", "Standard Deviation", "Lower Bollinger Band", "Middle Bollinger Band", "Upper Bollinger Band", "Waldo Volatility Indicator"])
-    # os.chdir("..")
-    # print(os.getcwd())
-    # ai_df.to_csv(
-    #     f'StockMarketPatterns/CSVinfo/{fi.ticker} {time()}.csv', index=False)
+    all_indicators = zip(fi.t_df_dates, fi.li_close, fi.d_percent_change, fi.sma1_ol,
+                         fi.sma2_ol, macd, macd_9ema, m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_ol, fi.rsi_ol[0], fi.stdev[0], fi.bb_lower, fi.bb_middle, fi.bb_upper, fi.waldo_vola_indicator,fi.tenkan_sen,fi.kijun_sen,fi.senkou_a,fi.senkou_b,fi.chikou_span)
+    ai_df = pd.DataFrame(all_indicators, columns=[
+        "Timestamp", "Close", "Daily Percent Change", "50-Day MA", "200-Day MA", "MACD", "MACD Signal Line", "MACD Histogram", "PPO", "PPO Signal Line", "PPO Histogram", "RSI", "Standard Deviation", "Lower Bollinger Band", "Middle Bollinger Band", "Upper Bollinger Band", "Waldo Volatility Indicator","Tenkan Sen","Kijun Sen","Senkou A","Senkou B","Chikou Span"])
+    os.chdir("..")
+    print(os.getcwd())
+    ai_df.to_csv(
+        f'StockMarketPatterns/CSVinfo/{fi.ticker} {time()}.csv', index=False)
