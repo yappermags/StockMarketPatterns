@@ -114,6 +114,7 @@ class FinanceIndicators():
                 self.li_high.append(dict_i_high)
                 self.li_low.append(dict_i_low)
                 self.li_close.append(dict_i_close)
+                self.np_close = np.array(self.li_close)
             except KeyError:
                 continue
             finally:
@@ -349,6 +350,12 @@ class FinanceIndicators():
         for x in range(0, len(self.bb_middle), 1):
             self.bb_lower.append(self.bb_middle[x] - bb_stddev[x])
             self.bb_upper.append(self.bb_middle[x] + bb_stddev[x])
+        bb_middle = np.array(self.bb_middle)
+        bb_upper = np.array(self.bb_upper)
+        bb_lower = np.array(self.bb_lower)
+        self.bbw = (bb_upper - bb_lower) / bb_middle
+        self.np_close = np.delete(self.np_close,np.arange(bb_length-1))
+        self.percent_b = (self.np_close - bb_lower) / (bb_upper - bb_lower)
 
     def seperated_close(self, prices, sc_length, output_list):
         """Uses numpy to seperate the values in a list
@@ -530,7 +537,6 @@ class FinanceIndicators():
         self.kaufmans_moving_avg = np.array(kama)
         self.kaufmans_moving_avg = np.insert(self.kaufmans_moving_avg,0, np.zeros(efficency_ratio_len-1))
         self.kaufmans_moving_avg = np.append(self.kaufmans_moving_avg, np.zeros(self.fallback))
-        pass
     
     def ema_sma_envelope(self,ema_or_sma,env_length,strength,lower_output_list,upper_output_list):
         """Finds either the EMA or SMA envelopes.
