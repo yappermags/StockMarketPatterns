@@ -353,9 +353,14 @@ class FinanceIndicators():
         bb_middle = np.array(self.bb_middle)
         bb_upper = np.array(self.bb_upper)
         bb_lower = np.array(self.bb_lower)
-        self.bbw = (bb_upper - bb_lower) / bb_middle
-        self.np_close = np.delete(self.np_close,np.arange(bb_length-1))
-        self.percent_b = (self.np_close - bb_lower) / (bb_upper - bb_lower)
+        self.bbw = ((bb_upper - bb_lower) / bb_middle) * 100
+        copy_close = self.np_close.copy()
+        copy_close = np.delete(copy_close,np.arange(bb_length-1))
+        self.percent_b = (copy_close - bb_lower) / (bb_upper - bb_lower)
+        self.bbw = np.insert(self.bbw, 0, np.zeros(bb_length-1))
+        self.bbw = np.append(self.bbw, np.zeros(self.fallback))
+        self.percent_b = np.insert(self.percent_b, 0, np.zeros(bb_length-1))
+        self.percent_b = np.append(self.percent_b, np.zeros(self.fallback))
 
     def seperated_close(self, prices, sc_length, output_list):
         """Uses numpy to seperate the values in a list
@@ -631,7 +636,7 @@ if __name__ == "__main__":
     eenv_u_ol = []
     fi.stock_symbol()
     fi.extract_dates()
-    fi.future_dates(26)
+    fi.future_dates(fi.fallback)
     fi.extract_values()
     fi.extract_cprices()
     fi.percent_change()
@@ -688,15 +693,16 @@ if __name__ == "__main__":
     # This runs the zip() method and exports the values to a CSV file. Only enabled in stable packages, otherwise commented out.
     # DO NOT DELETE THE BELOW LINES
     all_indicators = zip(fi.t_df_dates, fi.li_close, fi.d_percent_change, fi.sma1_ol,
-                         fi.sma2_ol, macd, macd_9ema, m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_ol, fi.rsi_ol[0], fi.stdev[0], fi.bb_lower, fi.bb_middle, fi.bb_upper, fi.waldo_vola_indicator, fi.tenkan_sen, fi.kijun_sen, fi.senkou_a, fi.senkou_b, fi.chikou_span, fi.kaufmans_moving_avg,senv_l_ol,senv_u_ol,eenv_l_ol,eenv_u_ol)
+                         fi.sma2_ol, macd, macd_9ema, m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_ol, fi.rsi_ol[0], fi.stdev[0], fi.bb_lower, fi.bb_middle, fi.bb_upper,fi.bbw,fi.percent_b, fi.waldo_vola_indicator, fi.tenkan_sen, fi.kijun_sen, fi.senkou_a, fi.senkou_b, fi.chikou_span, fi.kaufmans_moving_avg,senv_l_ol,senv_u_ol,eenv_l_ol,eenv_u_ol)
     ai_df = pd.DataFrame(all_indicators, columns=pd.MultiIndex.from_tuples([
         ("Timestamp", "Timestamp"), ("Close", "Close"), ("Daily Percent Change", "Daily Percent Change"), ("Moving Averages", "50-Day MA"), ("Moving Averages", "200-Day MA"), ("MACD", "MACD"), 
         ("MACD", "MACD Signal Line"), ("MACD", "MACD Histogram"), ("PPO", "PPO"), ("PPO", "PPO Signal Line"), ("PPO", "PPO Histogram"), ("RSI", "RSI"), ("Standard Deviation", "Standard Deviation"), 
-        ("Bollinger Bands", "Lower Bollinger Band"), ("Bollinger Bands", "Middle Bollinger Band"), ("Bollinger Bands", "Upper Bollinger Band"), ("Waldo Volatility Indicator", "Waldo Volatility Indicator"), 
-        ("Ichimoku Clouds", "Tenkan Sen"), ("Ichimoku Clouds", "Kijun Sen"), ("Ichimoku Clouds", "Senkou A"), ("Ichimoku Clouds", "Senkou B"), ("Ichimoku Clouds", "Chikou Span"), 
-        ("Kaufman's Adaptive Moving Average", "KAMA"),("Simple Moving Average Enevlopes"," Lower SMA Envelope"),("Simple Moving Average Enevlopes"," Higher SMA Envelope"),("Exponential Moving Average Enevlopes"," Lower EMA Envelope"),
-        ("Exponential Moving Average Enevlopes"," Higher EMA Envelope")]))
-    # os.chdir("..")
+        ("Bollinger Bands", "Lower Bollinger Band"), ("Bollinger Bands", "Middle Bollinger Band"), ("Bollinger Bands", "Upper Bollinger Band"),("Bollinger Band Indicators","Bollinger BandWidth"),
+        ("Bollinger Band Indicators","%B"), ("Waldo Volatility Indicator", "Waldo Volatility Indicator"), ("Ichimoku Clouds", "Tenkan Sen"), ("Ichimoku Clouds", "Kijun Sen"), ("Ichimoku Clouds", "Senkou A"), 
+        ("Ichimoku Clouds", "Senkou B"), ("Ichimoku Clouds", "Chikou Span"), ("Kaufman's Adaptive Moving Average", "KAMA"),("Simple Moving Average Enevlopes"," Lower SMA Envelope"),
+        ("Simple Moving Average Enevlopes"," Higher SMA Envelope"),("Exponential Moving Average Enevlopes"," Lower EMA Envelope"),("Exponential Moving Average Enevlopes"," Higher EMA Envelope")]))
+    
+    # os.chdir("c:/Users/magnu/.vscode/extensions/ms-python.python-2022.6.2/pythonFiles/lib/python/debugpy/launcher")
     print(os.getcwd())
     ai_df.to_csv(
         f'CSVinfo/{fi.ticker} {time()}.csv', index=False)

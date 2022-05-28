@@ -51,6 +51,9 @@ Here is a quick list of what is currently tracked in the FinanceIndicators() cla
     - Ichimoku clouds are 5 sets of trackers that measure the future potential of a stock. The Tenkan Sen is an average of the 9-Day High High and the Low Low. The Kijun Sen is an average of the 26-Day High High and Low Low. The Senkou A is an average of the Tenkan and Kijun Sen, and is set 26 days into the future. The Senkou B is the 52-Day High High and Low Low, and also set 26 days in the future. Finally, the Chikou Span is the close set 26 days behind.  
     - Called with `fi.ichimoku_clouds(tenkan_sen_len=9^, kijun_sen_len=26^, senkou_b_len=52^, fallback=26^)`
 
+- Kaufman's Adaptive Moving Average
+    - K
+
 
 ## Coming up
 
