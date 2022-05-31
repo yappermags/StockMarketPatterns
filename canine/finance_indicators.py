@@ -26,7 +26,8 @@ class FinanceIndicators():
     """
     This class is what stores all the indicators used commonly by investors for figuring out if a security is at a good point for investing or not.
     """
-    def __init__(self, ticker=None, sma1_ol=None, sma2_ol=None, simple_ma1_length=None, simple_ma2_length=None, ema1_ol=None, ema2_ol=None, ema1_length=None, ema2_length=None, rsi_ol=None, ppo_ol=None, stdev=None,fallback=None):
+
+    def __init__(self, ticker=None, sma1_ol=None, sma2_ol=None, simple_ma1_length=None, simple_ma2_length=None, ema1_ol=None, ema2_ol=None, ema1_length=None, ema2_length=None, rsi_ol=None, stadev=None, fallback=None):
         self.ticker = ticker
         self.simple_ma1_length = simple_ma1_length
         self.simple_ma2_length = simple_ma2_length
@@ -37,8 +38,7 @@ class FinanceIndicators():
         self.ema1_length = ema1_length
         self.ema2_length = ema2_length
         self.rsi_ol = rsi_ol
-        self.ppo_ol = ppo_ol
-        self.stdev = stdev
+        self.stadev = stadev
         self.fallback = fallback
         # self.simple_ma3_length = simple_ma3_length
 
@@ -48,6 +48,7 @@ class FinanceIndicators():
         Gets the stock symbol and MAX data from the yfinance library
         """
         thistory = {}
+        self.ticker_info = yf.Ticker(self.ticker).info
         exporter = yf.download(self.ticker, period="max")
 
         self.t_df = pd.DataFrame(data=exporter)
@@ -56,31 +57,35 @@ class FinanceIndicators():
         self.d_percent_change = []
         self.change = []
 
-        self.t_df_keys = self.ticker_df["Close"].keys()
-        self.t_df_dates = []
+        self.t_df_dates = list(self.ticker_df["Close"].keys())
         self.li_open = []
         self.li_high = []
         self.li_low = []
         self.li_close = []
+        self.li_open = np.array(list(self.ticker_df["Open"].values()))
+        self.li_high = np.array(list(self.ticker_df["High"].values()))
+        self.li_low = np.array(list(self.ticker_df["Low"].values()))
+        self.li_close = np.array(list(self.ticker_df["Close"].values()))
+        self.volume = np.array(list(self.ticker_df["Volume"].values()))
 
-    def extract_dates(self):
-        t_df_values = []
-        for v in self.ticker_df["Close"].keys():
-            self.t_df_dates.append(v)
+
 
     def future_dates(self, dates_ahead):
+        ticker_length = len(self.ticker)
         wd = datetime.weekday(self.t_df_dates[-1])
         first_date_calc = str(self.t_df_dates[-1])
         first_date_calc = first_date_calc.replace(' 00:00:00', '')
-        delta = timedelta(days=round((26 + 26), 0))
+        delta = timedelta(days=round((self.fallback*2), 0))
         final_date = str(delta + date.fromisoformat(first_date_calc))
-        if type(re.search(".TO", self.ticker)) == re.Match:
+        if wd == 4:
+            first_date_calc = date.fromisoformat(first_date_calc) + timedelta(days=3)
+        if self.ticker_info["country"] == "Canada":
             tsx = mcal.get_calendar('TSX')
             fd = tsx.schedule(start_date=first_date_calc, end_date=final_date)
             self.new_dates = list(fd.market_open._stat_axis)
             for x in range(0, len(self.new_dates)-dates_ahead, 1):
                 self.new_dates.pop()
-        elif type(re.search(".TO", self.ticker)) != re.Match:
+        elif self.ticker_info["country"] == "United States":
             nyse = mcal.get_calendar('NYSE')
             fd = nyse.schedule(start_date=first_date_calc, end_date=final_date)
             self.new_dates = list(fd.market_open._stat_axis)
@@ -92,36 +97,6 @@ class FinanceIndicators():
         for x in range(0, len(self.new_dates), 1):
             self.t_df_dates.append(self.new_dates[x])
 
-    def extract_values(self):
-        """
-        This extracts the values of the keys so they can be refered to in the extract_cprices method below
-        """
-        self.t_df_keys
-        self.t_df_keys = list(self.t_df_keys)
-        # print(lself.t_df_keys)
-
-    def extract_cprices(self):
-        """
-        This class method extracts the closing prices for a stock
-        """
-        for x in range(0, len(self.t_df_keys), 1):
-            try:
-                dict_i_open = self.ticker_df["Open"][self.t_df_keys[x]]
-                dict_i_high = self.ticker_df["High"][self.t_df_keys[x]]
-                dict_i_low = self.ticker_df["Low"][self.t_df_keys[x]]
-                dict_i_close = self.ticker_df["Close"][self.t_df_keys[x]]
-                self.li_open.append(dict_i_open)
-                self.li_high.append(dict_i_high)
-                self.li_low.append(dict_i_low)
-                self.li_close.append(dict_i_close)
-                self.np_close = np.array(self.li_close)
-            except KeyError:
-                continue
-            finally:
-                pass
-
-        # print(self.li_close[slice(1, 51, 1)])
-
     def percent_change(self):
         """
         This class method is what gives us the percentage change information required to somewhat judge a stock
@@ -130,14 +105,32 @@ class FinanceIndicators():
 
         ((today's price - yesterday's price)/yesterday's price)*100 (to return a percentage) 
         """
-        for x in range(1, len(self.t_df_keys), 1):
-            self.change.append(self.li_close[x]-self.li_close[x-1])
-            percent_change = (
-                (self.li_close[x]-self.li_close[x-1])/self.li_close[x-1])*100
-            self.d_percent_change.append(percent_change)
-        # print(self.d_percent_change)
 
-    def simple_ma(self, prices, length, output):
+        self.change = self.li_close[1::] - self.li_close[:-1]
+        self.d_percent_change = (self.change/self.li_close[:-1])*100
+
+    def seperated_close(self, sc_prices, sc_length):
+        """Uses numpy to seperate the values in a list
+
+        Parameters
+        ----------
+        prices: `list`
+        The list you want the for the prices to be sepeated
+
+        sc_length: `int`
+        How long each individual seperation is
+
+        output_list: `list`
+        The list you want to extract the seperated_close values to.
+        """
+        sc_lc = int(len(sc_prices)-(sc_length-1))
+        sc = np.empty((0, 1), float)
+        for x in range(0, sc_lc, 1):
+            window = sc_prices[x:x+sc_length]
+            sc = np.append(sc, window)
+        return sc.reshape(int(len(sc)/sc_length), sc_length)
+
+    def simple_ma(self, prices, length):
         """
         Credit for helping me figure this out goes to https://www.geeksforgeeks.org/how-to-calculate-moving-averages-in-python/
 
@@ -154,16 +147,12 @@ class FinanceIndicators():
         output_list: `int`
         The list you want the SMA values to be extracted to.
         """
-        i = 0
 
-        while i < len(prices) - length + 1:
-            timeframe = prices[i:i+length]
+        timeframe = self.seperated_close(prices, length)
 
-            tf_average = sum(timeframe) / length
-            output.append(tf_average)
-            i += 1
+        return np.sum(timeframe, 1) / length
 
-    def exponential_ma(self, prices, length, output_list):
+    def exponential_ma(self, prices, length, smooth_const=2):
         """
         Calculates the exponential average for a specified number of days.
 
@@ -182,47 +171,38 @@ class FinanceIndicators():
         -----
         EMA: https://school.stockcharts.com/doku.php?id=technical_indicators:moving_averages
         """
-        multiplier = (2 / (length+1))
-        i = 0
-        e_fv = sum(prices[0:length]) / length
-        output_list.append(e_fv)
-        while i < len(prices) - length+1:
-            window = prices[i:i+length]
+        output_list = []
+        multiplier = (smooth_const / (length+1))
+        output_list.append(sum(prices[0:length]) / length)
+        timeframe = self.seperated_close(prices, length)
+        list_close = np.array(prices)
+        list_close = np.delete(list_close, np.arange(length))
+        list_close = list(list_close)
+        len_lc = len(list_close)
+        for x in range(0, len(list_close), 1):
             e_window_average = (
-                window[-1] - output_list[-1]) * multiplier + output_list[-1]
-            output_list.append(e_window_average)
-            i += 1
+                list_close[x] - output_list[x]) * multiplier + output_list[x]
+            # output_list.append(e_window_average)
+            output_list = np.append(output_list, e_window_average)
+        return output_list
 
     def macd_whistogram(self, macd_short=12, macd_long=26, macd_sl=9):
         """
         The MACD is a calculation of the 12-period EMA - the 26-period EMA. A more advanced calculation (MACD histogram) uses a signal line, which is the 9-period EMA of the MACD itself, which is subtracted by the original MACD value.
         """
-        global m_histogram
-        global macd_9ema
-        global macd
-        m_histogram = []
-        macd_short = 12
-        macd_long = 26
-        macd_sl = 9
+        self.m_histogram = []
         macd12 = []
         macd26 = []
-        macd = []
-        macd_9ema = []
-        self.exponential_ma(self.li_close, macd_short, macd12)
-        self.exponential_ma(self.li_close, macd_long, macd26)
-        # print(len(macd12))
-        # print(len(macd26))
-        for x in range(0, len(macd26), 1):
-            macd_calc = macd12[x+14]-macd26[x]
-            macd.append(macd_calc)
-        # print(macd)
-        self.exponential_ma(macd, macd_sl, macd_9ema)
-        for y in range(0, len(macd_9ema), 1):
-            hist_calc = macd[y+7] - macd_9ema[y]
-            m_histogram.append(hist_calc)
-        # print(m_histogram)
+        self.macd = []
+        self.macd_9ema = []
+        macd12 = self.exponential_ma(self.li_close, macd_short)
+        macd26 = self.exponential_ma(self.li_close, macd_long)
+        self.macd = macd12[14:] - macd26
+        self.macd_9ema = self.exponential_ma(self.macd, macd_sl)
 
-    def ppo_whistogram(self, ppo_divide=26):
+        self.m_histogram = self.macd[int(macd_sl-1):] - self.macd_9ema
+
+    def ppo_whistogram(self, ppo_short=12, ppo_long=26, ppo_sl=9):
         """
         ppo_whistogram() -> Finds the Percentage Price Oscillator for a security.
 
@@ -234,17 +214,15 @@ class FinanceIndicators():
         """
         self.ppo_ol = []
         self.ppo = []
-        self.ppo_sl = []
+        self.ppo_hist = []
         output_list = []
         macd26 = []
-        self.exponential_ma(self.li_close, ppo_divide, macd26)
-        for x in range(0, len(macd), 1):
-            self.ppo.append((macd[x] / macd26[x]) * 100)
-        self.exponential_ma(self.ppo, 9, self.ppo_sl)
-        for x in range(0, len(self.ppo_sl), 1):
-            self.ppo_ol.append(self.ppo[x+7] - self.ppo_sl[x])
+        macd26 = self.exponential_ma(self.li_close, ppo_long)
+        self.ppo = (self.macd / macd26) * 100
+        self.ppo_sl = self.exponential_ma(self.ppo, ppo_sl)
+        self.ppo_hist = self.ppo[int(ppo_sl-1):] - self.ppo_sl
 
-    def rsi(self, output_list, length=14):
+    def rsi(self, length=14):
         """
         Calculates the RSI based on the closing price of a security. 
         Full credit for helping me figure out how to implement this into my program goes to alpharitims.com (link inside README.md)
@@ -258,34 +236,30 @@ class FinanceIndicators():
         The length to calculate RSI. Default is 14, and a change is not recommended.
 
         """
-        df = pd.DataFrame(self.li_close)
-        # Get positive and negative price differences
-        df[1] = df.diff(1)
-        df[2] = df[1].clip(lower=0).round(2)
-        df[3] = df[1].clip(upper=0).abs().round(2)
+        seperated_change = []
+        avg_positive_changes = []
+        avg_negative_changes = []
+        rs = []
+        rsi = []
+        for x in np.nditer(self.change[0:length]):
+            if x >= 0:
+                avg_positive_changes = np.append(avg_positive_changes,x)
+            else:
+                avg_negative_changes = np.append(avg_negative_changes,np.abs(x))
+        avg_positive_changes = np.append([], np.sum(avg_positive_changes) / length)
+        avg_negative_changes = np.append([],np.sum(avg_negative_changes) / length)
+        for x in np.nditer(self.change[length-1:]):
+            if x >= 0:
+                avg_positive_changes = np.append(avg_positive_changes,(avg_positive_changes[-1] *  (length-1) + x)/length)
+                avg_negative_changes = np.append(avg_negative_changes,(avg_negative_changes[-1] * (length-1) + 0)/length)
+            else:
+                avg_positive_changes = np.append(avg_positive_changes,(avg_positive_changes[-1] * (length-1) + 0)/length)
+                avg_negative_changes = np.append(avg_negative_changes,(avg_negative_changes[-1] * (length-1) + np.abs(x))/length)
+        rs = avg_positive_changes / avg_negative_changes
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
 
-        # Get Average positive and negative price difference
-        # Get WMS averages
-        df[4] = df[2].rolling(window=length, min_periods=length).mean()[
-            :length+1]
-        df[5] = df[3].rolling(window=length, min_periods=length).mean()[
-            :length+1]
-        # Average Gains
-        for i, row in enumerate(df[4].iloc[length+1:]):
-            df[4].iloc[i + length + 1] = (df[4].iloc[i + length]
-                                          * (length - 1) + df[2].iloc[i + length + 1]) / length
-
-        # Average Losses
-        for i, row in enumerate(df[5].iloc[length+1:]):
-            df[5].iloc[i + length + 1] = (df[5].iloc[i + length]
-                                          * (length - 1) + df[3].iloc[i + length + 1]) / length
-
-        # View initial results
-        df[6] = df[4] / df[5]
-        df[7] = 100 - (100 / (1 + df[6]))
-        output_list.append(list(df[7]))
-
-    def standard_deviation(self, input_list, output_list, sd_length=10):
+    def standard_deviation(self, input_list, sd_length=10):
         """Calculates the Standard Deviation measurement used for measuring volatility
 
         Parameters
@@ -294,7 +268,7 @@ class FinanceIndicators():
         The input list of daily closing prices. Default: fi.li_close
 
         output: `list`
-        The list you want to extract the standard deviation values to. Default: fi.stdev
+        The list you want to extract the standard deviation values to. Default: fi.stadev
 
         sd_length: `int`
         The time window you want 
@@ -304,33 +278,19 @@ class FinanceIndicators():
         `self.stadev` is used for running inside other 
 
         """
-        input_loop = []
+        seperated_prices = []
         sma = []
         sma_t10 = []
-        deviation = np.empty((0, 1), float)
-        dsq_ma = np.empty((0, 1), float)
-        std_dev = np.empty((0, 1), float)
+        deviation = []
+        dsq_ma = []
+        std_dev = []
 
-        ip_df = pd.DataFrame({0: input_list})
-        self.simple_ma(input_list, sd_length, sma)
-        for i in range(0, len(sma), 1):
-            input_loop.append(input_list[i:i+sd_length])
-            for x in range(0, sd_length, 1):
-                sma_t10.append(sma[i])
-
-        np_sma_t10 = np.array(sma_t10).reshape(
-            int(round(len(sma_t10)/sd_length, 0)), sd_length)
-        np_input_loop = np.array(input_loop)
-        for x in range(0, len(np_input_loop), 1):
-            for y in range(0, len(np_input_loop[0]), 1):
-                deviation = np.append(
-                    deviation, (np_input_loop[x][y] - np_sma_t10[x][y])**2)
-        deviation = deviation.reshape(int(len(deviation)/sd_length), sd_length)
-
-        # for x in range(0,len(deviation),1):
-        dsq_ma = np.mean(deviation, axis=1)
-        self.stadev = np.sqrt(dsq_ma)
-        output_list.append(list(np.sqrt(dsq_ma)))
+        seperated_prices = self.seperated_close(self.li_close, sd_length)
+        sma = np.mean(seperated_prices,axis=1)
+        sma = sma.reshape(len(sma),1)
+        deviation_squared = (seperated_prices - sma)**2
+        d_sq_avg = np.mean(deviation_squared,axis=1)
+        return np.sqrt(d_sq_avg)
 
     def bollinger_bands(self, bb_length=20, multiplier=2):
         """This gathers the bollinger bands as created by John Bollinger
@@ -343,46 +303,20 @@ class FinanceIndicators():
         self.bb_middle = []
         self.bb_upper = []
         self.bb_lower = []
-        self.simple_ma(self.li_close, bb_length, self.bb_middle)
-        self.standard_deviation(self.li_close, stddev, bb_length)
-        for x in range(0, len(stddev[0]), 1):
-            bb_stddev.append(stddev[0][x]*multiplier)
-        for x in range(0, len(self.bb_middle), 1):
-            self.bb_lower.append(self.bb_middle[x] - bb_stddev[x])
-            self.bb_upper.append(self.bb_middle[x] + bb_stddev[x])
-        bb_middle = np.array(self.bb_middle)
-        bb_upper = np.array(self.bb_upper)
-        bb_lower = np.array(self.bb_lower)
-        self.bbw = ((bb_upper - bb_lower) / bb_middle) * 100
-        copy_close = self.np_close.copy()
-        copy_close = np.delete(copy_close,np.arange(bb_length-1))
-        self.percent_b = (copy_close - bb_lower) / (bb_upper - bb_lower)
+        self.bb_middle = self.simple_ma(self.li_close, bb_length)
+        stddev = self.standard_deviation(self.li_close, bb_length)
+        bb_stddev = stddev*multiplier
+        self.bb_lower = self.bb_middle - bb_stddev
+        self.bb_upper = self.bb_middle + bb_stddev
+        self.bbw = ((self.bb_upper - self.bb_lower) / self.bb_middle) * 100
+        # copy_close = self.np_close.copy()
+        # copy_close = np.delete(copy_close, np.arange(bb_length-1))
+        self.percent_b = (
+            self.li_close[(bb_length-1):] - self.bb_lower) / (self.bb_upper - self.bb_lower)
         self.bbw = np.insert(self.bbw, 0, np.zeros(bb_length-1))
         self.bbw = np.append(self.bbw, np.zeros(self.fallback))
         self.percent_b = np.insert(self.percent_b, 0, np.zeros(bb_length-1))
         self.percent_b = np.append(self.percent_b, np.zeros(self.fallback))
-
-    def seperated_close(self, prices, sc_length, output_list):
-        """Uses numpy to seperate the values in a list
-
-        Parameters
-        ----------
-        prices: `list`
-        The list you want the for the prices to be sepeated
-
-        sc_length: `int`
-        How long each individual seperation is
-
-        output_list: `list`
-        The list you want to extract the seperated_close values to.
-        """
-        sc_lc = int(len(prices)-(sc_length-1))
-        sc = np.empty((0, 1), float)
-        for x in range(0, sc_lc, 1):
-            window = prices[x:x+sc_length]
-            sc = np.append(sc, window)
-        sc = sc.reshape(int(len(sc)/sc_length), sc_length)
-        output_list.append(list(sc))
 
     def waldo_volatility_indicator(self, wvi_length=28):
         """Measures volatility and works a lot like the Ulcer Index.
@@ -396,11 +330,7 @@ class FinanceIndicators():
         """
         seperated_close = np.empty((0, 1), float)
         self.waldo_vola_indicator = []
-        for x in range(0, len(self.li_close)-wvi_length, 1):
-            window = self.li_close[x:x+wvi_length]
-            seperated_close = np.append(seperated_close, window)
-        seperated_close = seperated_close.reshape(
-            int(len(seperated_close)/wvi_length), wvi_length)
+        seperated_close = self.seperated_close(self.li_close, wvi_length)
         mp = np.amax(seperated_close, axis=1)
         max_prices = np.repeat(mp, wvi_length)
         max_prices = max_prices.reshape(
@@ -409,7 +339,7 @@ class FinanceIndicators():
         pd_mean = np.mean(price_dropdown, axis=1)
         self.waldo_vola_indicator = np.sqrt(pd_mean)
         self.waldo_vola_indicator = np.insert(
-            self.waldo_vola_indicator, 0, np.zeros(wvi_length))
+            self.waldo_vola_indicator, 0, np.zeros(wvi_length-1))
         self.waldo_vola_indicator = np.append(
             self.waldo_vola_indicator, np.zeros(self.fallback))
 
@@ -442,18 +372,12 @@ class FinanceIndicators():
         self.senkou_a = []
         self.senkou_b = []
         self.chikou_span = []
-        self.seperated_close(self.li_low, tenkan_sen_len, ts_sc_min)
-        self.seperated_close(self.li_high, tenkan_sen_len, ts_sc_max)
-        ts_sc_min = np.array(ts_sc_min[0])
-        ts_sc_max = np.array(ts_sc_max[0])
-        self.seperated_close(self.li_low, kijun_sen_len, ks_sc_min)
-        self.seperated_close(self.li_high, kijun_sen_len, ks_sc_max)
-        ks_sc_min = np.array(ks_sc_min[0])
-        ks_sc_max = np.array(ks_sc_max[0])
-        self.seperated_close(self.li_low, senkou_b_len, se_b_min)
-        self.seperated_close(self.li_high, senkou_b_len, se_b_max)
-        se_b_min = np.array(se_b_min[0])
-        se_b_max = np.array(se_b_max[0])
+        ts_sc_min = self.seperated_close(self.li_low, tenkan_sen_len)
+        ts_sc_max = self.seperated_close(self.li_high, tenkan_sen_len)
+        ks_sc_min = self.seperated_close(self.li_low, kijun_sen_len)
+        ks_sc_max = self.seperated_close(self.li_high, kijun_sen_len)
+        se_b_min = self.seperated_close(self.li_low, senkou_b_len)
+        se_b_max = self.seperated_close(self.li_high, senkou_b_len)
 
         def find_min_max(min_iv, max_iv, output_number):
             max_iv_list = []
@@ -484,12 +408,12 @@ class FinanceIndicators():
         self.tenkan_sen = np.append(self.tenkan_sen, np.zeros(fallback))
         self.kijun_sen = np.append(self.kijun_sen, np.zeros(fallback))
         find_min_max(se_b_min, se_b_max, 2)
-        np_close = np.array(self.li_close)
+        np_close = self.li_close.copy()
         np_close = np.delete(np_close, np.arange(fallback))
         np_close = np.append(np_close, np.zeros(fallback+fallback))
         self.chikou_span = np_close
-    
-    def kaufmans_adaptive_ma(self,efficency_ratio_len=10,fast_ema=2,slow_ema=30):
+
+    def kaufmans_adaptive_ma(self, efficency_ratio_len=10, fast_ema=2, slow_ema=30):
         """Calculates Kaufman's Adaptive Moving Average as created by Perry Kaufman.
 
         Parameters
@@ -497,53 +421,56 @@ class FinanceIndicators():
 
         efficency_ratio_len=10: `int`
         The length for the efficency ratio. A higher value is more sensitive to volatility and vise-versa
-        
+
         fast_ema=2: `int`
         The smaller EMA smoothing value. Perry Kaufman recommends a value of 2
         slow_ema=30: `int`
         The larger EMA smoothing value. Perry Kaufman recommends a value of 10
         """
         # np.seterr(all="ignore")
-        efficency_ratio =     []
-        kama_change =         []
-        kama_v_sc =           []
-        kama_volatility =     []
-        smoothing_const =     []
-        first_simple_ma =     []
+        efficency_ratio = []
+        kama_change = []
+        kama_v_sc = []
+        kama_volatility = []
+        smoothing_const = []
+        first_simple_ma = []
         kama_one_period_off = []
         self.kaufmans_moving_avg = []
         self.change = np.array(self.change)
         np_close = np.array(self.li_close)
         np_close = np.delete(np_close, np.arange(efficency_ratio_len))
-        for x in range(efficency_ratio_len,len(self.li_close),1):
-            kama_change.append(abs(self.li_close[x] - self.li_close[x-(efficency_ratio_len)]))
+        # for x in range(efficency_ratio_len, len(self.li_close), 1):
+        kama_change.append(
+            abs(self.li_close[:-efficency_ratio_len] - self.li_close[efficency_ratio_len:]))
         kama_change = np.array(kama_change)
         kama_volatility = np.abs(self.change)
         kama_volatility = np.insert(kama_volatility, 0, np.ones(1))
         k_vol = []
-        self.seperated_close(kama_volatility, 10, k_vol)
-        kama_volatility = np.array(np.sum(k_vol[0],axis=1))
+        k_vol = self.seperated_close(kama_volatility, 10)
+        kama_volatility = np.array(np.sum(k_vol, axis=1))
         kama_volatility = np.delete(kama_volatility, 0)
         efficency_ratio = kama_change / kama_volatility
         efficency_ratio = np.delete(efficency_ratio, 0)
-        
+
         fema = 2/(fast_ema+1)
         sema = 2/(slow_ema+1)
 
         kama = []
         smoothing_const = (efficency_ratio * (fema - sema) + sema)**2
-        smoothing_const = np.insert(smoothing_const, 0, np.zeros(efficency_ratio_len+1))
+        smoothing_const = np.insert(
+            smoothing_const, 0, np.zeros(efficency_ratio_len+1))
         sc = list(smoothing_const)
         kama.append(self.li_close[efficency_ratio_len-1])
-        
 
-        for x in range(efficency_ratio_len,len(self.li_close),1):
+        for x in range(efficency_ratio_len, len(self.li_close), 1):
             kama.append(kama[-1]+sc[x]*(self.li_close[x]-kama[-1]))
         self.kaufmans_moving_avg = np.array(kama)
-        self.kaufmans_moving_avg = np.insert(self.kaufmans_moving_avg,0, np.zeros(efficency_ratio_len-1))
-        self.kaufmans_moving_avg = np.append(self.kaufmans_moving_avg, np.zeros(self.fallback))
-    
-    def ema_sma_envelope(self,ema_or_sma,env_length,strength,lower_output_list,upper_output_list):
+        self.kaufmans_moving_avg = np.insert(
+            self.kaufmans_moving_avg, 0, np.zeros(efficency_ratio_len-1))
+        self.kaufmans_moving_avg = np.append(
+            self.kaufmans_moving_avg, np.zeros(self.fallback))
+
+    def ema_sma_envelope(self, ema_or_sma, env_length, strength):
         """Finds either the EMA or SMA envelopes.
 
         Parameters
@@ -563,145 +490,144 @@ class FinanceIndicators():
 
         upper_output_list: `list`
         The list you want to store the outputted upper envelope results to.
+
+        Returns
+        -------
+
+        lower_output_list: `np.ndarray`
+        The extracted values for the lower SMA or EMA envelope.
+
+        uppper_output_list: `np.ndarray`
+        The extracted values for the upper SMA or EMA envelope.
         """
         env_middle = []
         if ema_or_sma:
-            self.exponential_ma(self.li_close, env_length, env_middle)
+            env_middle = self.exponential_ma(self.li_close, env_length)
         else:
-            self.simple_ma(self.li_close, env_length, env_middle)
+            env_middle = self.simple_ma(self.li_close, env_length)
 
-        env_upper = []
-        env_lower = []
+        upper_output_list = []
+        lower_output_list = []
         sma_weighted = []
-        env_middle = np.array(env_middle)
         sma_weighted = env_middle * (strength/100)
-        env_lower = env_middle - sma_weighted
-        env_upper = env_middle + sma_weighted
+        lower_output_list = env_middle - sma_weighted
+        upper_output_list = env_middle + sma_weighted
 
-        if ema_or_sma:
-            env_lower = np.insert(env_lower, 0, np.zeros(env_length-2))
-            env_upper = np.insert(env_upper, 0, np.zeros(env_length-2))
-            env_lower = np.append(env_lower, np.zeros(self.fallback))
-            env_upper = np.append(env_upper, np.zeros(self.fallback))
-        else:
-            env_lower = np.insert(env_lower, 0, np.zeros(env_length-1))
-            env_upper = np.insert(env_upper, 0, np.zeros(env_length-1))
-            env_lower = np.append(env_lower, np.zeros(self.fallback))
-            env_upper = np.append(env_upper, np.zeros(self.fallback))
+        lower_output_list = np.insert(
+            lower_output_list, 0, np.zeros(env_length-1))
+        upper_output_list = np.insert(
+            upper_output_list, 0, np.zeros(env_length-1))
+        lower_output_list = np.append(
+            lower_output_list, np.zeros(self.fallback))
+        upper_output_list = np.append(
+            upper_output_list, np.zeros(self.fallback))
 
-        lower_output_list.append(env_lower)
-        upper_output_list.append(env_upper)
-
-
-
-
-
-def nan_generator(amount, input_list):
-    """ Takes the np.zeros() array and adds it to a non-numpy list
-    This very simple function takes an arroy of np.zeros() and puts it into the first values of a non-numpy list.
-
-    Parameters
-    ----------
-    amount: `int`
-        The amount of zeros you need to use.
-    input_list: `list`
-        The list you want to add the zeros to.
-    """
-    for x in range(0, amount, 1):
-        input_list.insert(0, float("NaN"))
-
-
-
+        return lower_output_list, upper_output_list
+    
+    def accumulation_distribution_line(self):
+        money_flow_multiplier = []
+        money_flow_volume = []
+        self.adl_values = []
+        money_flow_multiplier = ((self.li_close - self.li_low) - (self.li_high - self.li_close)) / (self.li_high - self.li_low)
+        money_flow_volume = money_flow_multiplier * self.volume
+        self.adl_values = np.append([],money_flow_volume[0])
+        for mfv in np.nditer(money_flow_volume):
+            self.adl_values = np.append(self.adl_values, self.adl_values[-1] + mfv)
+        pass
 
 if __name__ == "__main__":
     # Defining fi and the variables inside
     fi = FinanceIndicators()
     fi.fallback = 26
-    def zero_after_values(input_list, amount=fi.fallback):
-        for x in range(0, amount, 1):
-            input_list.append(0)
     fi.ticker = "AMZN"
+    ema_ol = []
     fi.sma1_ol = []
     fi.sma2_ol = []
     fi.simple_ma1_length = 50
     fi.simple_ma2_length = 200
     fi.ema1_length = 20
     fi.rsi_ol = []
-    stdev = []
-    fi.stdev = []
-    stddev_ol = []
+    fi.stadev = []
     senv_l_ol = []
     senv_u_ol = []
     eenv_l_ol = []
     eenv_u_ol = []
     fi.stock_symbol()
-    fi.extract_dates()
     fi.future_dates(fi.fallback)
-    fi.extract_values()
-    fi.extract_cprices()
     fi.percent_change()
-    fi.simple_ma(fi.li_close, fi.simple_ma1_length, fi.sma1_ol)
-    fi.simple_ma(fi.li_close, fi.simple_ma2_length, fi.sma2_ol)
+    fi.sma1_ol = fi.simple_ma(fi.li_close, fi.simple_ma1_length)
+    fi.sma2_ol = fi.simple_ma(fi.li_close, fi.simple_ma2_length)
     fi.macd_whistogram()
-    fi.rsi(fi.rsi_ol)
     fi.ppo_whistogram()
-    fi.standard_deviation(fi.li_close, stdev)
+    fi.rsi_ol = fi.rsi()
+    fi.stadev = fi.standard_deviation(fi.li_close)
     fi.bollinger_bands()
-    fi.stdev.append(list(stdev[0]))
     fi.waldo_volatility_indicator()
     fi.ichimoku_cloud()
     fi.kaufmans_adaptive_ma()
-    fi.ema_sma_envelope(0, 20, 2.5, senv_l_ol, senv_u_ol)
-    fi.ema_sma_envelope(1, 20, 2.5, eenv_l_ol, eenv_u_ol)
-    senv_l_ol = np.array(senv_l_ol[0])
-    senv_u_ol = np.array(senv_u_ol[0])
-    eenv_l_ol = np.array(eenv_l_ol[0])
-    eenv_u_ol = np.array(eenv_u_ol[0])
+    senv_l_ol, senv_u_ol = fi.ema_sma_envelope(0, 20, 2.5)
+    eenv_l_ol, eenv_u_ol = fi.ema_sma_envelope(1, 20, 2.5)
+    fi.accumulation_distribution_line()
 
-    nan_generator(1, fi.d_percent_change)
-    nan_generator(fi.simple_ma1_length-1, fi.sma1_ol)
-    nan_generator(fi.simple_ma2_length-1, fi.sma2_ol)
-    nan_generator(24, macd)
-    nan_generator(31, macd_9ema)
-    nan_generator(31, m_histogram)
-    nan_generator(24, fi.ppo)
-    nan_generator(31, fi.ppo_sl)
-    nan_generator(31, fi.ppo_ol)
-    nan_generator(9, fi.stdev[0])
-    nan_generator(19, fi.bb_lower)
-    nan_generator(19, fi.bb_middle)
-    nan_generator(19, fi.bb_upper)
-    len_of_dates = len(fi.t_df_dates)
-    # for x in range(0, 26, 1):
-    # fi.t_df_dates.append(len_of_dates+x)
-    # zero_after_values(fi.t_df_dates)
-    zero_after_values(fi.li_close)
-    zero_after_values(fi.d_percent_change)
-    zero_after_values(fi.sma1_ol)
-    zero_after_values(fi.sma2_ol)
-    zero_after_values(macd)
-    zero_after_values(macd_9ema)
-    zero_after_values(m_histogram)
-    zero_after_values(fi.ppo)
-    zero_after_values(fi.ppo_sl)
-    zero_after_values(fi.ppo_ol)
-    zero_after_values(fi.rsi_ol[0])
-    zero_after_values(fi.stdev[0])
-    zero_after_values(fi.bb_lower)
-    zero_after_values(fi.bb_middle)
-    zero_after_values(fi.bb_upper)
+    fi.d_percent_change = np.insert(fi.d_percent_change, 0, np.zeros(1))
+    fi.sma1_ol = np.insert(fi.sma1_ol, 0, np.zeros(fi.simple_ma1_length-1))
+    fi.sma2_ol = np.insert(fi.sma2_ol, 0, np.zeros(fi.simple_ma2_length-1))
+    fi.macd = np.insert(fi.macd, 0, np.zeros(len(fi.li_close) - len(fi.macd)))
+    fi.macd_9ema = np.insert(fi.macd_9ema, 0, np.zeros(
+        len(fi.li_close) - len(fi.macd_9ema)))
+    fi.m_histogram = np.insert(fi.m_histogram, 0, np.zeros(
+        len(fi.li_close) - len(fi.m_histogram)))
+    fi.ppo = np.insert(fi.ppo, 0, np.zeros(len(fi.li_close) - len(fi.ppo)))
+    fi.ppo_sl = np.insert(fi.ppo_sl, 0, np.zeros(
+        len(fi.li_close) - len(fi.ppo_sl)))
+    fi.ppo_hist = np.insert(fi.ppo_hist, 0, np.zeros(
+        len(fi.li_close) - len(fi.ppo_hist)))
+    fi.rsi_ol = np.insert(fi.rsi_ol, 0, np.zeros(
+        len(fi.li_close) - len(fi.rsi_ol)))
+    fi.stadev = np.insert(fi.stadev, 0, np.zeros(
+        len(fi.li_close) - len(fi.stadev)))
+    fi.bb_lower = np.insert(fi.bb_lower, 0, np.zeros(
+        len(fi.li_close) - len(fi.bb_lower)))
+    fi.bb_middle = np.insert(fi.bb_middle, 0, np.zeros(
+        len(fi.li_close) - len(fi.bb_middle)))
+    fi.bb_upper = np.insert(fi.bb_upper, 0, np.zeros(
+        len(fi.li_close) - len(fi.bb_upper)))
+
+    fi.li_open = np.append(fi.li_close, np.zeros(fi.fallback))
+    fi.li_high = np.append(fi.li_close, np.zeros(fi.fallback))
+    fi.li_low = np.append(fi.li_close, np.zeros(fi.fallback))
+    fi.li_close = np.append(fi.li_close, np.zeros(fi.fallback))
+    fi.d_percent_change = np.append(fi.d_percent_change, np.zeros(fi.fallback))
+    fi.sma1_ol = np.append(fi.sma1_ol, np.zeros(fi.fallback))
+    fi.sma2_ol = np.append(fi.sma2_ol, np.zeros(fi.fallback))
+    fi.macd = np.append(fi.macd, np.zeros(fi.fallback))
+    fi.macd_9ema = np.append(fi.macd_9ema, np.zeros(fi.fallback))
+    fi.m_histogram = np.append(fi.m_histogram, np.zeros(fi.fallback))
+    fi.ppo = np.append(fi.ppo, np.zeros(fi.fallback))
+    fi.ppo_sl = np.append(fi.ppo_sl, np.zeros(fi.fallback))
+    fi.ppo_hist = np.append(fi.ppo_hist, np.zeros(fi.fallback))
+    fi.rsi_ol = np.append(fi.rsi_ol, np.zeros(fi.fallback))
+    fi.stadev = np.append(fi.stadev, np.zeros(fi.fallback))
+    fi.bb_lower = np.append(fi.bb_lower, np.zeros(fi.fallback))
+    fi.bb_middle = np.append(fi.bb_middle, np.zeros(fi.fallback))
+    fi.bb_upper = np.append(fi.bb_upper, np.zeros(fi.fallback))
     # This runs the zip() method and exports the values to a CSV file. Only enabled in stable packages, otherwise commented out.
     # DO NOT DELETE THE BELOW LINES
     all_indicators = zip(fi.t_df_dates, fi.li_close, fi.d_percent_change, fi.sma1_ol,
-                         fi.sma2_ol, macd, macd_9ema, m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_ol, fi.rsi_ol[0], fi.stdev[0], fi.bb_lower, fi.bb_middle, fi.bb_upper,fi.bbw,fi.percent_b, fi.waldo_vola_indicator, fi.tenkan_sen, fi.kijun_sen, fi.senkou_a, fi.senkou_b, fi.chikou_span, fi.kaufmans_moving_avg,senv_l_ol,senv_u_ol,eenv_l_ol,eenv_u_ol)
-    ai_df = pd.DataFrame(all_indicators, columns=pd.MultiIndex.from_tuples([
-        ("Timestamp", "Timestamp"), ("Close", "Close"), ("Daily Percent Change", "Daily Percent Change"), ("Moving Averages", "50-Day MA"), ("Moving Averages", "200-Day MA"), ("MACD", "MACD"), 
-        ("MACD", "MACD Signal Line"), ("MACD", "MACD Histogram"), ("PPO", "PPO"), ("PPO", "PPO Signal Line"), ("PPO", "PPO Histogram"), ("RSI", "RSI"), ("Standard Deviation", "Standard Deviation"), 
-        ("Bollinger Bands", "Lower Bollinger Band"), ("Bollinger Bands", "Middle Bollinger Band"), ("Bollinger Bands", "Upper Bollinger Band"),("Bollinger Band Indicators","Bollinger BandWidth"),
-        ("Bollinger Band Indicators","%B"), ("Waldo Volatility Indicator", "Waldo Volatility Indicator"), ("Ichimoku Clouds", "Tenkan Sen"), ("Ichimoku Clouds", "Kijun Sen"), ("Ichimoku Clouds", "Senkou A"), 
-        ("Ichimoku Clouds", "Senkou B"), ("Ichimoku Clouds", "Chikou Span"), ("Kaufman's Adaptive Moving Average", "KAMA"),("Simple Moving Average Enevlopes"," Lower SMA Envelope"),
-        ("Simple Moving Average Enevlopes"," Higher SMA Envelope"),("Exponential Moving Average Enevlopes"," Lower EMA Envelope"),("Exponential Moving Average Enevlopes"," Higher EMA Envelope")]))
-    
+                         fi.sma2_ol, fi.macd, fi.macd_9ema, fi.m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_hist, fi.rsi_ol, fi.stadev, fi.bb_lower, fi.bb_middle, fi.bb_upper, fi.bbw, fi.percent_b, fi.waldo_vola_indicator, fi.tenkan_sen, fi.kijun_sen, fi.senkou_a, fi.senkou_b, fi.chikou_span, fi.kaufmans_moving_avg, senv_l_ol, senv_u_ol, eenv_l_ol, eenv_u_ol)
+    ai_df = pd.DataFrame(all_indicators, columns=pd.MultiIndex.from_tuples([("Timestamp", "Timestamp"),
+                                                                            ("Close", "Close"), ("Daily Percent Change", "Daily Percent Change"), (
+        "Moving Averages", "50-Day MA"), ("Moving Averages", "200-Day MA"), ("MACD", "MACD"),
+        ("MACD", "MACD Signal Line"), ("MACD", "MACD Histogram"), ("PPO", "PPO"), ("PPO",
+                                                                                   "PPO Signal Line"), ("PPO", "PPO Histogram"), ("RSI", "RSI"), ("Standard Deviation", "Standard Deviation"),
+        ("Bollinger Bands", "Lower Bollinger Band"), ("Bollinger Bands", "Middle Bollinger Band"), (
+            "Bollinger Bands", "Upper Bollinger Band"), ("Bollinger Band Indicators", "Bollinger BandWidth"),
+        ("Bollinger Band Indicators", "%B"), ("Waldo Volatility Indicator", "Waldo Volatility Indicator"), (
+            "Ichimoku Clouds", "Tenkan Sen"), ("Ichimoku Clouds", "Kijun Sen"), ("Ichimoku Clouds", "Senkou A"),
+        ("Ichimoku Clouds", "Senkou B"), ("Ichimoku Clouds", "Chikou Span"), ("Kaufman's Adaptive Moving Average",
+                                                                              "KAMA"), ("Simple Moving Average Enevlopes", " Lower SMA Envelope"),
+        ("Simple Moving Average Enevlopes", " Higher SMA Envelope"), ("Exponential Moving Average Enevlopes", " Lower EMA Envelope"), ("Exponential Moving Average Enevlopes", " Higher EMA Envelope")]))
+
     # os.chdir("c:/Users/magnu/.vscode/extensions/ms-python.python-2022.6.2/pythonFiles/lib/python/debugpy/launcher")
     print(os.getcwd())
     ai_df.to_csv(
