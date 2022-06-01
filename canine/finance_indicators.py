@@ -533,14 +533,36 @@ class FinanceIndicators():
         self.adl_values = np.append([],money_flow_volume[0])
         for mfv in np.nditer(money_flow_volume):
             self.adl_values = np.append(self.adl_values, self.adl_values[-1] + mfv)
+    
+
+    def aroon(self, observations=25):
+        min_values = []
+        max_values = []
+        aroon_min_values = []
+        aroon_max_values = []
+        aroon_mixed = ()
+        aroon_up = []
+        aroon_down = []
+        aroon_min = self.seperated_close(self.li_low, observations)
+        aroon_max = self.seperated_close(self.li_high, observations)
+        min_values = np.amin(aroon_min,axis=1)
+        max_values = np.amax(aroon_max,axis=1)
+        min_values = min_values.reshape(len(min_values),1)
+        max_values = max_values.reshape(len(max_values),1)
+        aroon_min_values = np.where(aroon_min == min_values)
+        aroon_max_values = np.where(aroon_max == max_values)
+        # aroon_mixed = (aroon_min_values[1],aroon_max_values[1])
+        for x in range(0,len(aroon_min),1):
+            aroon_min_values = np.append(aroon_min_values, np.unique(aroon_min[x]))
+            aroon_max_values = np.append(aroon_max_values, np.unique(aroon_max[x]))
         pass
+
 
 if __name__ == "__main__":
     # Defining fi and the variables inside
     fi = FinanceIndicators()
     fi.fallback = 26
     fi.ticker = "AMZN"
-    ema_ol = []
     fi.sma1_ol = []
     fi.sma2_ol = []
     fi.simple_ma1_length = 50
@@ -568,6 +590,7 @@ if __name__ == "__main__":
     senv_l_ol, senv_u_ol = fi.ema_sma_envelope(0, 20, 2.5)
     eenv_l_ol, eenv_u_ol = fi.ema_sma_envelope(1, 20, 2.5)
     fi.accumulation_distribution_line()
+    fi.aroon()
 
     fi.d_percent_change = np.insert(fi.d_percent_change, 0, np.zeros(1))
     fi.sma1_ol = np.insert(fi.sma1_ol, 0, np.zeros(fi.simple_ma1_length-1))
