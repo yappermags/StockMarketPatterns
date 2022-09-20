@@ -5,10 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: FinanceIndicators",
+            "name": "Python: Finance Indicators",
             "type": "python",
             "request": "launch",
             "program": "./canine/finance_indicators.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: GUI",
+            "type": "python",
+            "request": "launch",
+            "program": "./canine/gui.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }

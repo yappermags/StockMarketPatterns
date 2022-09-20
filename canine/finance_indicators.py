@@ -79,6 +79,9 @@ class FinanceIndicators():
         final_date = str(delta + date.fromisoformat(first_date_calc))
         if wd == 4:
             first_date_calc = date.fromisoformat(first_date_calc) + timedelta(days=3)
+        else:
+            first_date_calc = date.fromisoformat(first_date_calc) + timedelta(days=1)
+
         if self.ticker_info["country"] == "Canada":
             tsx = mcal.get_calendar('TSX')
             fd = tsx.schedule(start_date=first_date_calc, end_date=final_date)
@@ -485,12 +488,6 @@ class FinanceIndicators():
         strength: `float | int`
         This is the strength of the envelopes represented in a percentage (eg. 2.5 strength = 2.5% / 100 = 0.025).
 
-        lower_output_list: `list`
-        The list you want to store the outputted lower envelope results to.
-
-        upper_output_list: `list`
-        The list you want to store the outputted upper envelope results to.
-
         Returns
         -------
 
@@ -524,38 +521,8 @@ class FinanceIndicators():
 
         return lower_output_list, upper_output_list
     
-    def accumulation_distribution_line(self):
-        money_flow_multiplier = []
-        money_flow_volume = []
-        self.adl_values = []
-        money_flow_multiplier = ((self.li_close - self.li_low) - (self.li_high - self.li_close)) / (self.li_high - self.li_low)
-        money_flow_volume = money_flow_multiplier * self.volume
-        self.adl_values = np.append([],money_flow_volume[0])
-        for mfv in np.nditer(money_flow_volume):
-            self.adl_values = np.append(self.adl_values, self.adl_values[-1] + mfv)
-    
 
-    def aroon(self, observations=25):
-        min_values = []
-        max_values = []
-        aroon_min_values = []
-        aroon_max_values = []
-        aroon_mixed = ()
-        aroon_up = []
-        aroon_down = []
-        aroon_min = self.seperated_close(self.li_low, observations)
-        aroon_max = self.seperated_close(self.li_high, observations)
-        min_values = np.amin(aroon_min,axis=1)
-        max_values = np.amax(aroon_max,axis=1)
-        min_values = min_values.reshape(len(min_values),1)
-        max_values = max_values.reshape(len(max_values),1)
-        aroon_min_values = np.where(aroon_min == min_values)
-        aroon_max_values = np.where(aroon_max == max_values)
-        # aroon_mixed = (aroon_min_values[1],aroon_max_values[1])
-        for x in range(0,len(aroon_min),1):
-            aroon_min_values = np.append(aroon_min_values, np.unique(aroon_min[x]))
-            aroon_max_values = np.append(aroon_max_values, np.unique(aroon_max[x]))
-        pass
+
 
 
 if __name__ == "__main__":
@@ -587,10 +554,14 @@ if __name__ == "__main__":
     fi.waldo_volatility_indicator()
     fi.ichimoku_cloud()
     fi.kaufmans_adaptive_ma()
+    fi.accumulation_distribution_line()
     senv_l_ol, senv_u_ol = fi.ema_sma_envelope(0, 20, 2.5)
     eenv_l_ol, eenv_u_ol = fi.ema_sma_envelope(1, 20, 2.5)
-    fi.accumulation_distribution_line()
-    fi.aroon()
+    fi.balance_of_power()
+    fi.chaikin_money_flow()
+    fi.ease_of_movement()
+    fi_three_teen = fi.force_index(13)
+    # fi.aroon()
 
     fi.d_percent_change = np.insert(fi.d_percent_change, 0, np.zeros(1))
     fi.sma1_ol = np.insert(fi.sma1_ol, 0, np.zeros(fi.simple_ma1_length-1))
@@ -615,6 +586,7 @@ if __name__ == "__main__":
         len(fi.li_close) - len(fi.bb_middle)))
     fi.bb_upper = np.insert(fi.bb_upper, 0, np.zeros(
         len(fi.li_close) - len(fi.bb_upper)))
+    fi_three_teen = np.insert(fi.bb_upper, 0, np.zeros(len(fi.li_close) - len(fi_three_teen)))
 
     fi.li_open = np.append(fi.li_close, np.zeros(fi.fallback))
     fi.li_high = np.append(fi.li_close, np.zeros(fi.fallback))
@@ -634,12 +606,13 @@ if __name__ == "__main__":
     fi.bb_lower = np.append(fi.bb_lower, np.zeros(fi.fallback))
     fi.bb_middle = np.append(fi.bb_middle, np.zeros(fi.fallback))
     fi.bb_upper = np.append(fi.bb_upper, np.zeros(fi.fallback))
+    fi_three_teen = np.append(fi_three_teen, np.zeros(fi.fallback))
     # This runs the zip() method and exports the values to a CSV file. Only enabled in stable packages, otherwise commented out.
     # DO NOT DELETE THE BELOW LINES
-    all_indicators = zip(fi.t_df_dates, fi.li_close, fi.d_percent_change, fi.sma1_ol,
-                         fi.sma2_ol, fi.macd, fi.macd_9ema, fi.m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_hist, fi.rsi_ol, fi.stadev, fi.bb_lower, fi.bb_middle, fi.bb_upper, fi.bbw, fi.percent_b, fi.waldo_vola_indicator, fi.tenkan_sen, fi.kijun_sen, fi.senkou_a, fi.senkou_b, fi.chikou_span, fi.kaufmans_moving_avg, senv_l_ol, senv_u_ol, eenv_l_ol, eenv_u_ol)
+    all_indicators = zip(fi.t_df_dates, fi.li_open, fi.li_high, fi.li_low, fi.li_close, fi.d_percent_change, fi.sma1_ol,
+                         fi.sma2_ol, fi.macd, fi.macd_9ema, fi.m_histogram, fi.ppo, fi.ppo_sl, fi.ppo_hist, fi.rsi_ol, fi.stadev, fi.bb_lower, fi.bb_middle, fi.bb_upper, fi.bbw, fi.percent_b, fi.waldo_vola_indicator, fi.tenkan_sen, fi.kijun_sen, fi.senkou_a, fi.senkou_b, fi.chikou_span, fi.kaufmans_moving_avg, senv_l_ol, senv_u_ol, eenv_l_ol, eenv_u_ol,fi.bop,fi.cmf, fi_three_teen)
     ai_df = pd.DataFrame(all_indicators, columns=pd.MultiIndex.from_tuples([("Timestamp", "Timestamp"),
-                                                                            ("Close", "Close"), ("Daily Percent Change", "Daily Percent Change"), (
+                                                                            ("Open","Open"), ("High","High"), ("Low","Low"), ("Close", "Close"), ("Daily Percent Change", "Daily Percent Change"), (
         "Moving Averages", "50-Day MA"), ("Moving Averages", "200-Day MA"), ("MACD", "MACD"),
         ("MACD", "MACD Signal Line"), ("MACD", "MACD Histogram"), ("PPO", "PPO"), ("PPO",
                                                                                    "PPO Signal Line"), ("PPO", "PPO Histogram"), ("RSI", "RSI"), ("Standard Deviation", "Standard Deviation"),
@@ -649,7 +622,8 @@ if __name__ == "__main__":
             "Ichimoku Clouds", "Tenkan Sen"), ("Ichimoku Clouds", "Kijun Sen"), ("Ichimoku Clouds", "Senkou A"),
         ("Ichimoku Clouds", "Senkou B"), ("Ichimoku Clouds", "Chikou Span"), ("Kaufman's Adaptive Moving Average",
                                                                               "KAMA"), ("Simple Moving Average Enevlopes", " Lower SMA Envelope"),
-        ("Simple Moving Average Enevlopes", " Higher SMA Envelope"), ("Exponential Moving Average Enevlopes", " Lower EMA Envelope"), ("Exponential Moving Average Enevlopes", " Higher EMA Envelope")]))
+        ("Simple Moving Average Enevlopes", " Higher SMA Envelope"), ("Exponential Moving Average Enevlopes", " Lower EMA Envelope"), ("Exponential Moving Average Enevlopes", " Higher EMA Envelope"),("Balance of Power","Balance of Power"),
+        ("Chaikin Money Flow","Chaikin Money Flow"),("Force Index","Thirteen-Day Force Index")]))
 
     # os.chdir("c:/Users/magnu/.vscode/extensions/ms-python.python-2022.6.2/pythonFiles/lib/python/debugpy/launcher")
     print(os.getcwd())
